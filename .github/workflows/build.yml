@@ -23,9 +23,6 @@ jobs:
       matrix:
         machine:
           - FG_5GT_1SX_V1_1          # 你的机型
-          - KP_9000_6XHML_X2         # 4x2 / RTL8372 参考机型
-          - KP_9000_9XHML_X_V3_1     # 8x1 / RTL8373 参考机型
-
     steps:
       - uses: actions/checkout@v6
         with:
