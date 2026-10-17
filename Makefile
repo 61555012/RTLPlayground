@@ -43,7 +43,7 @@ else
 	GIT_VERSION := $(GIT_VERSION)-dirty
 endif
 
-VERSION_EXTENSION = v$(VERSION)-$(GIT_VERSION)
+VERSION_EXTENSION = v$(VERSION)
 FILENAME_EXTENSION = $(VERSION_EXTENSION)-$(MACHINE)
 
 # Deterministic build date: honor SOURCE_DATE_EPOCH, else the HEAD commit date,
