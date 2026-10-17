@@ -1,30 +1,77 @@
 name: Build firmware
 
+# 触发条件:
+#   - 任意分支 push / 任意 PR        -> 编译并上传构件(Artifacts), 方便下载 .bin
+#   - 推送 v* 开头的 tag (如 v0.1.0)  -> 额外自动发布到 Releases
 on:
   push:
     branches: ['**']
+    tags: ['v*']
   pull_request:
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    # debian:trixie(=Debian 13) 自带 sdcc / gcc / make / binutils(objcopy) / python3,
+    # 与仓库根目录 Dockerfile 用的 debian:13-slim 一致。
     container:
       image: debian:trixie
 
+    # 每种机型单独跑一次, 互不拖累(fail-fast:false 保证一个机型挂了不影响其它)
+    strategy:
+      fail-fast: false
+      matrix:
+        machine:
+          - FG_5GT_1SX_V1_1          # 你的机型
+          - KP_9000_6XHML_X2         # 4x2 / RTL8372 参考机型
+          - KP_9000_9XHML_X_V3_1     # 8x1 / RTL8373 参考机型
+
     steps:
       - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0             # 取完整历史, 让 Makefile 里的 git 版本号/构建日期正确
 
       - name: Install dependencies
         run: |
-          apt update
-          apt install make gcc sdcc xxd python-is-python3 libjson-c-dev zlib1g-dev -y
+          apt-get update
+          apt-get install -y --no-install-recommends \
+            make gcc sdcc xxd git python-is-python3 \
+            libjson-c-dev zlib1g-dev
+
       - name: Run the host-side unit tests
         run: make -C test
+
       - name: Check that every machine definition can be compiled
         run: make machine_check
-      - name: Make project (4x2/RTL8372)
-        run: make CI=1 MACHINE="KP_9000_6XHML_X2"
-      - name: Make project (8x1/RTL8373)
-        run: make CI=1 MACHINE="KP_9000_9XHML_X_V3_1"
-      - name: Make project with the health instrumentation
-        run: make clean && make CI=1 MACHINE="KP_9000_6XHML_X2" HEALTH=1
+
+      - name: Build firmware (${{ matrix.machine }})
+        run: make CI=1 MACHINE="${{ matrix.machine }}"
+
+      - name: Upload firmware artifact
+        uses: actions/upload-artifact@v4
+        with:
+          # 每个机型一个独立构件, 名字里带机型名, 方便区分
+          name: rtlplayground-${{ matrix.machine }}
+          # Makefile 把成品放在 output/<MACHINE>/rtlplayground-vX.Y.Z-<git>-<MACHINE>.bin
+          path: output/${{ matrix.machine }}/*.bin
+          if-no-files-found: error
+
+  # 仅在推送 v* tag 时运行: 把上面所有构件汇总并发布到 GitHub Releases
+  release:
+    name: Publish release (on tag)
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write            # 发 Release 需要写权限
+    steps:
+      - name: Download all firmware artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: firmware
+          merge-multiple: true   # 把各机型构件合并到同一个目录
+
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: firmware/*.bin
