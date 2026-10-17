@@ -90,6 +90,68 @@ void machine_custom_init(void) __banked
 	REG_SET(RTL837X_REG_LED_GLB_IO_EN, 0x7624155b);
 }
 
+#elif defined MACHINE_FG_5GT_1SX_V1_1
+/*
+ * Ruiying RY-5GT-1SX / TY-5GT-1SX, PCB FG-5GT-1SX_V1.1
+ * RTL8372N + RTL8221B(SDS0) + 1 x SFP+(SDS1)
+ *
+ * leds_setup() writes LED_MODE = 0x0021e6b0 unconditionally. That value still
+ * has bits 7 and 9 set, and the OEM firmware of this board ends up with the
+ * LED_MODE fields [5..8] = 1 and [9..12] = 2 (bit 17, "LED solid on", set),
+ * i.e. the OEM clears bits 7 and 9. Without this the port LEDs stay dark on
+ * this PCB. Cross-checked against the 4 MByte stock flash image:
+ *   0x6520 (LED_MODE)       : [9..12] = 2, [5..8] = 1, bit 17 = 1
+ *   0x7f8c (PIN_MUX_0)      : 0x20db68bf  (OEM)
+ *
+ * The OEM image carries several LED profiles. The one matching this board's
+ * wiring is the custom mux profile at code 00c44e (0x65e0-0x65f4, see the
+ * machine file) together with
+ *   0x65dc (LED_GLB_IO_EN) = 0x3624155b
+ * which enables exactly the 12 pads the 6 ports need:
+ *   0,1 3,4 6,8 10,12 18,21 25,26  (plus SYS LEDs on bits 28/29)
+ * i.e. 6 ports x 2 lamps, matching the mux table in the machine file.
+ *
+ * Unlike SWTG024AS this board does NOT need the extra SDS0 TX-polarity bits
+ * (0x100 / 0x4000). sds_init() already sets the N-chip RX PN swap (0x200 /
+ * 0x2000). See the note at the end of this function.
+ */
+void machine_custom_init(void) __banked
+{
+	// Enable the 12 LED pads the OEM firmware's real LED profile uses.
+	// (0x65dc -> 0x3624155b, decoded: pads 0,1,3,4,6,8,10,12,18,21,25,26.)
+	// Only ever reg_bit_set here — a full REG_SET of LED_GLB_IO_EN cleared
+	// the pads' reset-default state and took down port 5 (RTL8221B SMI) +
+	// management access. Do NOT full-write 0x65dc.
+	reg_bit_set(RTL837X_REG_LED_GLB_IO_EN, 0);
+	reg_bit_set(RTL837X_REG_LED_GLB_IO_EN, 1);
+	reg_bit_set(RTL837X_REG_LED_GLB_IO_EN, 3);
+	reg_bit_set(RTL837X_REG_LED_GLB_IO_EN, 4);
+	reg_bit_set(RTL837X_REG_LED_GLB_IO_EN, 6);
+	reg_bit_set(RTL837X_REG_LED_GLB_IO_EN, 8);
+	reg_bit_set(RTL837X_REG_LED_GLB_IO_EN, 10);
+	reg_bit_set(RTL837X_REG_LED_GLB_IO_EN, 12);
+	reg_bit_set(RTL837X_REG_LED_GLB_IO_EN, 18);
+	reg_bit_set(RTL837X_REG_LED_GLB_IO_EN, 21);
+	reg_bit_set(RTL837X_REG_LED_GLB_IO_EN, 25);
+	reg_bit_set(RTL837X_REG_LED_GLB_IO_EN, 26);	// SFP 黄灯
+
+	reg_bit_set(RTL837X_REG_LED_MODE, 17);
+	reg_bit_clear(RTL837X_REG_LED_MODE, 9);
+	reg_bit_clear(RTL837X_REG_LED_MODE, 7);
+
+	// NO extra SDS0 polarity bits for this board.
+	//
+	// sds_init() already applies the N-chip RX PN swap for SDS0 when
+	// isN && !n_10g && !isRTL8373 (which is this machine):
+	//   sds_write_v(0, 6, 2, pval | 0x2000)   RX PN swap, 64B/66B
+	//   sds_write_v(0, 0, 0, pval | 0x200)    RX PN swap, 8B/10B
+	// The SWTG024AS boards additionally set 0x100 / 0x4000, i.e. the TX
+	// polarity, because their PCB crosses the SDS0 pairs. This PCB does not:
+	// adding those bits here made port 5 (RTL8221B) link up and light its LEDs
+	// but transmit garbage, so the management UI was unreachable through it.
+	// Do not re-add them unless the RTL8221B link turns out to need TX swap.
+}
+
 #else
 void machine_custom_init(void) __banked { }
 #endif
