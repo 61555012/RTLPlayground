@@ -5,7 +5,7 @@ Documentation for the unmanaged switch marked as `FG-5GT-1SX_V1.1`.
 ## Brands
 
 * Ruiying RY-5GT-1SX
-* Ruiying TY-5GT-1SX
+
 
 <img src="photos/FG-5GT-1SX_V1.1/label.jpg" width="400" />
 
@@ -50,6 +50,5 @@ Bottom
 
 Input power is delivered via barrel plug, `12V 1A` adapter (model LD-1212GS).
 
-## Photos
 
-Teardown photos taken from the acwifi.net review of this switch.
+
